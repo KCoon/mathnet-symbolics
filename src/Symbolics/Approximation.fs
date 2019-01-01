@@ -3,9 +3,6 @@
 open System
 open MathNet.Numerics
 
-[<RequireQualifiedAccess>]
-module internal Primitive =
-    let inline complex (x:complex32) = complex (float x.Real) (float x.Imaginary)
 
 
 // this could be extended to arbitrary/custom precision approximations in the future
@@ -17,7 +14,7 @@ type Approximation =
     static member op_Implicit (x:float) = Real x
     static member op_Implicit (x:float32) = Real (float x)
     static member op_Implicit (x:complex) = Complex x
-    static member op_Implicit (x:complex32) = Complex (Primitive.complex x)
+    static member op_Implicit (x:complex32) = Complex (FromPrimitive.complex32 x)
 
     member x.RealValue =
         match x with
@@ -39,7 +36,7 @@ module Approximation =
     let fromReal (x:float) = Real x
     let fromReal32 (x:float32) = Real (float x)
     let fromComplex (x:complex) = Complex x
-    let fromComplex32 (x:complex32) = Complex (Primitive.complex x)
+    let fromComplex32 (x:complex32) = Complex (FromPrimitive.complex32 x)
 
     let negate = function
         | Real a -> Real (-a)

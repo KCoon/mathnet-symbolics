@@ -598,6 +598,7 @@ module Operators =
     let coth = function
         | Undefined | ComplexInfinity -> undefined
         | PositiveInfinity -> one
+        | NegativeInfinity -> minusOne
         | Zero -> complexInfinity
         | Constant I -> Function (Cot, one) |> multiply (Constant I) |> negate // coth(j*x) = -j*cot(x)
         | Number n when n.IsNegative -> Function (Coth, Number -n) |> negate // coth(-x) = -coth(x)
