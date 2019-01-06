@@ -24,7 +24,7 @@ type NewValue =
     | PositiveInfinity
     | NegativeInfinity
     | Undefined
-    
+
 
 [<RequireQualifiedAccess>]
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
@@ -397,17 +397,38 @@ module NewValue =
         | NewValue.Undefined | NewValue.ComplexInfinity -> NewValue.Undefined
 
 
-    let asin = function
+    let rec asin = function
+        | Zero -> zero
         | NewValue.RealApprox a -> Trig.Asin a |> fromReal
         | NewValue.ComplexApprox a -> Trig.Asin a |> fromComplex
+        | NewValue.Rational a -> NewValue.RealApprox (float a) |> asin
+        | NewValue.Constant c -> resolveConstant c |> asin
+        | NewValue.PositiveInfinity -> NewValue.ComplexInfinity // actually: i*oo
+        | NewValue.NegativeInfinity -> NewValue.ComplexInfinity // actually: -i*oo
+        | NewValue.ComplexInfinity -> NewValue.ComplexInfinity
+        | NewValue.Undefined -> NewValue.Undefined
 
-    let acos = function
+    let rec acos = function
+        | One -> zero
+        | MinusOne -> NewValue.Constant Constant.Pi
         | NewValue.RealApprox a -> Trig.Acos a |> fromReal
         | NewValue.ComplexApprox a -> Trig.Acos a |> fromComplex
+        | NewValue.Rational a -> NewValue.RealApprox (float a) |> acos
+        | NewValue.Constant c -> resolveConstant c |> acos
+        | NewValue.PositiveInfinity -> NewValue.ComplexInfinity // actually: -i*oo
+        | NewValue.NegativeInfinity -> NewValue.ComplexInfinity // actually: i*oo
+        | NewValue.ComplexInfinity -> NewValue.ComplexInfinity
+        | NewValue.Undefined -> NewValue.Undefined
 
-    let atan = function
+    let rec atan = function
+        | Zero -> zero
         | NewValue.RealApprox a -> Trig.Atan a |> fromReal
         | NewValue.ComplexApprox a -> Trig.Atan a |> fromComplex
+        | NewValue.Rational a -> NewValue.RealApprox (float a) |> atan
+        | NewValue.Constant c -> resolveConstant c |> atan
+        | NewValue.PositiveInfinity -> NewValue.RealApprox (Constants.PiOver2)
+        | NewValue.NegativeInfinity -> NewValue.RealApprox (-Constants.PiOver2)
+        | NewValue.Undefined | NewValue.ComplexInfinity -> NewValue.Undefined
 
     let atan2 x y =
         match x, y with
@@ -416,59 +437,138 @@ module NewValue =
         | NewValue.ComplexApprox a, NewValue.RealApprox b -> Complex.atan (a / (complex b 0.0)) |> fromComplex
         | NewValue.RealApprox a, NewValue.ComplexApprox b -> Complex.atan (complex a 0.0) / b |> fromComplex
 
-    let acsc = function
+    let rec acsc = function
+        | Zero -> NewValue.ComplexInfinity
         | NewValue.RealApprox a -> Trig.Acsc a |> fromReal
         | NewValue.ComplexApprox a -> Trig.Acsc a |> fromComplex
+        | NewValue.Rational a -> NewValue.RealApprox (float a) |> acsc
+        | NewValue.Constant c -> resolveConstant c |> acsc
+        | NewValue.PositiveInfinity -> zero
+        | NewValue.NegativeInfinity -> zero
+        | NewValue.ComplexInfinity -> zero
+        | NewValue.Undefined -> NewValue.Undefined
 
-    let asec = function
+    let rec asec = function
+        | Zero -> NewValue.ComplexInfinity
+        | One -> zero
+        | MinusOne -> NewValue.Constant Constant.Pi
         | NewValue.RealApprox a -> Trig.Asec a |> fromReal
         | NewValue.ComplexApprox a -> Trig.Asec a |> fromComplex
+        | NewValue.Rational a -> NewValue.RealApprox (float a) |> asec
+        | NewValue.Constant c -> resolveConstant c |> asec
+        | NewValue.PositiveInfinity -> NewValue.RealApprox (Constants.PiOver2)
+        | NewValue.NegativeInfinity -> NewValue.RealApprox (Constants.PiOver2)
+        | NewValue.ComplexInfinity -> NewValue.RealApprox (Constants.PiOver2)
+        | NewValue.Undefined -> NewValue.Undefined
 
-    let acot = function
+    let rec acot = function
         | NewValue.RealApprox a -> Trig.Acot a |> fromReal
         | NewValue.ComplexApprox a -> Trig.Acot a |> fromComplex
+        | NewValue.Rational a -> NewValue.RealApprox (float a) |> acot
+        | NewValue.Constant c -> resolveConstant c |> acot
+        | NewValue.PositiveInfinity -> zero
+        | NewValue.NegativeInfinity -> zero
+        | NewValue.ComplexInfinity -> zero
+        | NewValue.Undefined -> NewValue.Undefined
 
 
-    let asinh = function
+    let rec asinh = function
         | NewValue.RealApprox a -> Trig.Asinh a |> fromReal
         | NewValue.ComplexApprox a -> Trig.Asinh a |> fromComplex
+        | NewValue.Rational a -> NewValue.RealApprox (float a) |> asinh
+        | NewValue.Constant c -> resolveConstant c |> asinh
+        | NewValue.PositiveInfinity -> NewValue.PositiveInfinity
+        | NewValue.NegativeInfinity -> NewValue.NegativeInfinity
+        | NewValue.ComplexInfinity -> NewValue.ComplexInfinity
+        | NewValue.Undefined -> NewValue.Undefined
 
-    let acosh = function
+    let rec acosh = function
         | NewValue.RealApprox a -> Trig.Acosh a |> fromReal
         | NewValue.ComplexApprox a -> Trig.Acosh a |> fromComplex
+        | NewValue.Rational a -> NewValue.RealApprox (float a) |> acosh
+        | NewValue.Constant c -> resolveConstant c |> acosh
+        | NewValue.PositiveInfinity -> NewValue.PositiveInfinity
+        | NewValue.NegativeInfinity -> NewValue.PositiveInfinity
+        | NewValue.ComplexInfinity -> NewValue.PositiveInfinity
+        | NewValue.Undefined -> NewValue.Undefined
 
-    let atanh = function
+    let rec atanh = function
         | NewValue.RealApprox a -> Trig.Atanh a |> fromReal
         | NewValue.ComplexApprox a -> Trig.Atanh a |> fromComplex
+        | NewValue.Rational a -> NewValue.RealApprox (float a) |> atanh
+        | NewValue.Constant c -> resolveConstant c |> atanh
+        | NewValue.PositiveInfinity -> NewValue.ComplexApprox (complex 0.0 -Constants.PiOver2)
+        | NewValue.NegativeInfinity -> NewValue.ComplexApprox (complex 0.0 Constants.PiOver2)
+        | NewValue.Undefined | NewValue.ComplexInfinity -> NewValue.Undefined
 
-    let acsch = function
+    let rec acsch = function
         | NewValue.RealApprox a -> Trig.Acsch a |> fromReal
         | NewValue.ComplexApprox a -> Trig.Acsch a |> fromComplex
+        | NewValue.Rational a -> NewValue.RealApprox (float a) |> acsch
+        | NewValue.Constant c -> resolveConstant c |> acsch
+        | NewValue.PositiveInfinity -> zero
+        | NewValue.NegativeInfinity -> zero
+        | NewValue.ComplexInfinity -> zero
+        | NewValue.Undefined -> NewValue.Undefined
 
-    let asech = function
+    let rec asech = function
         | NewValue.RealApprox a -> Trig.Asech a |> fromReal
         | NewValue.ComplexApprox a -> Trig.Asech a |> fromComplex
+        | NewValue.Rational a -> NewValue.RealApprox (float a) |> asech
+        | NewValue.Constant c -> resolveConstant c |> asech
+        | NewValue.PositiveInfinity -> NewValue.ComplexApprox (complex 0.0 Constants.PiOver2)
+        | NewValue.NegativeInfinity -> NewValue.ComplexApprox (complex 0.0 -Constants.PiOver2)
+        | NewValue.Undefined | NewValue.ComplexInfinity -> NewValue.Undefined
 
-    let acoth = function
+    let rec acoth = function
         | NewValue.RealApprox a -> Trig.Acoth a |> fromReal
         | NewValue.ComplexApprox a -> Trig.Acoth a |> fromComplex
+        | NewValue.Rational a -> NewValue.RealApprox (float a) |> acoth
+        | NewValue.Constant c -> resolveConstant c |> acoth
+        | NewValue.PositiveInfinity -> zero
+        | NewValue.NegativeInfinity -> zero
+        | NewValue.ComplexInfinity -> zero
+        | NewValue.Undefined -> NewValue.Undefined
 
 
-    let airyai = function
+    let rec airyai = function
         | NewValue.RealApprox a -> SpecialFunctions.AiryAi a |> fromReal
         | NewValue.ComplexApprox a -> SpecialFunctions.AiryAi a |> fromComplex
+        | NewValue.Rational a -> NewValue.RealApprox (float a) |> airyai
+        | NewValue.Constant c -> resolveConstant c |> airyai
+        | NewValue.PositiveInfinity -> zero
+        | NewValue.NegativeInfinity -> zero
+        | NewValue.ComplexInfinity -> NewValue.Undefined
+        | NewValue.Undefined -> NewValue.Undefined
 
-    let airyaiprime = function
+    let rec airyaiprime = function
         | NewValue.RealApprox a -> SpecialFunctions.AiryAiPrime a |> fromReal
         | NewValue.ComplexApprox a -> SpecialFunctions.AiryAiPrime a |> fromComplex
+        | NewValue.Rational a -> NewValue.RealApprox (float a) |> airyaiprime
+        | NewValue.Constant c -> resolveConstant c |> airyaiprime
+        | NewValue.PositiveInfinity -> zero
+        | NewValue.ComplexInfinity -> NewValue.Undefined
+        | NewValue.Undefined -> NewValue.Undefined
 
-    let airybi = function
+    let rec airybi = function
         | NewValue.RealApprox a -> SpecialFunctions.AiryBi a |> fromReal
         | NewValue.ComplexApprox a -> SpecialFunctions.AiryBi a |> fromComplex
+        | NewValue.Rational a -> NewValue.RealApprox (float a) |> airybi
+        | NewValue.Constant c -> resolveConstant c |> airybi
+        | NewValue.PositiveInfinity -> NewValue.PositiveInfinity
+        | NewValue.NegativeInfinity -> zero
+        | NewValue.ComplexInfinity -> NewValue.Undefined
+        | NewValue.Undefined -> NewValue.Undefined
 
-    let airybiprime = function
+    let rec airybiprime = function
         | NewValue.RealApprox a -> SpecialFunctions.AiryBiPrime a |> fromReal
         | NewValue.ComplexApprox a -> SpecialFunctions.AiryBiPrime a |> fromComplex
+        | NewValue.Rational a -> NewValue.RealApprox (float a) |> airybiprime
+        | NewValue.Constant c -> resolveConstant c |> airybiprime
+        | NewValue.PositiveInfinity -> NewValue.PositiveInfinity
+        | NewValue.NegativeInfinity -> zero
+        | NewValue.ComplexInfinity -> NewValue.Undefined
+        | NewValue.Undefined -> NewValue.Undefined
 
 
     let besselj nu z =
@@ -576,7 +676,7 @@ module NewValue =
         | HankelH1, [nu; x] -> hankelh1 nu x
         | HankelH2, [nu; x] -> hankelh2 nu x
         | _ -> failwith "not supported"
-    
+
 
 //type NewValue with
 
@@ -588,4 +688,4 @@ module NewValue =
     //static member op_Implicit (x:float32) = NewValue.fromReal32 x
     //static member op_Implicit (x:complex) = NewValue.fromComplex x
     //static member op_Implicit (x:complex32) = NewValue.fromComplex32 x
-    
+
