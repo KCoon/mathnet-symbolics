@@ -6,6 +6,11 @@ open MathNet.Symbolics
 
 type BigInteger = System.Numerics.BigInteger
 
+type ComplexBigRational = {
+    Real: BigRational
+    Imaginary: BigRational
+}
+
 [<RequireQualifiedAccess>]
 module internal FromPrimitive =
     let inline complex32 (x:complex32) = complex (float x.Real) (float x.Imaginary)
@@ -13,28 +18,26 @@ module internal FromPrimitive =
     let inline int64 (x:int64) = BigRational.FromBigInt (BigInteger x)
     let inline bigint (x:BigInteger) = BigRational.FromBigInt x
 
-
 [<RequireQualifiedAccess>]
 type NewValue =
-    | Rational of BigRational
+    | Exact of ExactValue
     | RealApprox of float
     | ComplexApprox of complex
-    | Constant of Constant
-    | ComplexInfinity
-    | PositiveInfinity
-    | NegativeInfinity
-    | Undefined
 
 
 [<RequireQualifiedAccess>]
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module NewValue =
 
-    let fromInt32 (x:int) = NewValue.Rational (FromPrimitive.int32 x)
-    let fromInt64 (x:int64) = NewValue.Rational (FromPrimitive.int64 x)
-    let fromInteger (x:BigInteger) = NewValue.Rational (FromPrimitive.bigint x)
-    let fromIntegerFraction (n:BigInteger) (d:BigInteger) = NewValue.Rational (BigRational.FromBigIntFraction (n, d))
-    let fromRational (x:BigRational) = NewValue.Rational x
+    let fromInt32 (x:int) = NewValue.Exact (ExactValue.fromInt32 x)
+    let fromInt64 (x:int64) = NewValue.Exact (ExactValue.fromInt64 x)
+    let fromInteger (x:BigInteger) = NewValue.Exact (ExactValue.fromInteger x)
+    let fromIntegerFraction (n:BigInteger) (d:BigInteger) = NewValue.Exact (ExactValue.fromIntegerFraction n d)
+    let fromRational (x:BigRational) = NewValue.Exact (ExactValue.fromRational x)
+    let fromComplexInt32 (real:int) (imag:int) = NewValue.Exact (ExactValue.fromComplexInt32 real imag)
+    let fromComplexInt64 (real:int64) (imag:int64) = NewValue.Exact (ExactValue.fromComplexInt64 real imag)
+    let fromComplexInteger (real:BigInteger) (imag:BigInteger) = NewValue.Exact (ExactValue.fromComplexInteger real imag)
+    let fromComplexRational (real:BigRational) (imag:BigRational) = NewValue.Exact (ExactValue.fromComplexRational real imag)
 
     let fromReal (x:float) =
         if Double.IsPositiveInfinity x then NewValue.PositiveInfinity
@@ -62,9 +65,12 @@ module NewValue =
 
     let fromConstant (c:Constant) = NewValue.Constant c
 
+    let fromExact (x:ExactValue) = NewValue.Exact x
+
     let zero = NewValue.Rational BigRational.Zero
     let one = NewValue.Rational BigRational.One
     let minusOne = NewValue.Rational (BigRational.FromInt -1)
+
 
     let (|Zero|_|) = function
         | NewValue.Rational n when n.IsZero -> Some Zero
@@ -74,18 +80,29 @@ module NewValue =
 
     let (|One|_|) = function
         | NewValue.Rational n when n.IsOne -> Some One
-        | NewValue.RealApprox x when x = 1.0 -> Some One
-        | NewValue.ComplexApprox x when x = Complex.one -> Some One
+        | NewValue.ComplexRational n when n.Real.IsOne && n.Imaginary.IsZero -> Some One
         | _ -> None
 
     let (|MinusOne|_|) = function
         | NewValue.Rational n when n.IsInteger && n.Numerator = BigInteger.MinusOne -> Some MinusOne
-        | NewValue.RealApprox x when x = -1.0 -> Some MinusOne
-        | NewValue.ComplexApprox x when x.IsReal() && x.Real = -1.0 -> Some MinusOne
+        | NewValue.ComplexRational n when n.Real.IsInteger && n.Real.Numerator = BigInteger.MinusOne && n.Imaginary.IsZero -> Some MinusOne
+        | _ -> None
+
+    let (|ApproxOne|_|) = function
+        | One _ -> Some ApproxOne
+        | NewValue.RealApprox x when x = 1.0 -> Some ApproxOne
+        | NewValue.ComplexApprox x when x = Complex.one -> Some ApproxOne
+        | _ -> None
+
+    let (|ApproxMinusOne|_|) = function
+        | MinusOne _ -> Some ApproxMinusOne
+        | NewValue.RealApprox x when x = -1.0 -> Some ApproxMinusOne
+        | NewValue.ComplexApprox x when x.IsReal() && x.Real = -1.0 -> Some ApproxMinusOne
         | _ -> None
 
     let (|Positive|_|) = function
         | NewValue.Rational n when n.IsPositive -> Some Positive
+        | NewValue.ComplexRational n when n.Real.IsPositive && n.Imaginary.IsZero -> Some Positive
         | NewValue.RealApprox x when x > 0.0 -> Some Positive
         | NewValue.ComplexApprox x when x.IsReal() && x.Real > 0.0-> Some Positive
         | NewValue.PositiveInfinity -> Some Positive
@@ -94,6 +111,7 @@ module NewValue =
 
     let (|Negative|_|) = function
         | NewValue.Rational n when n.IsNegative -> Some Negative
+        | NewValue.ComplexRational n when n.Real.IsNegative && n.Imaginary.IsZero -> Some Negative
         | NewValue.RealApprox x when x < 0.0 -> Some Negative
         | NewValue.ComplexApprox x when x.IsReal() && x.Real < 0.0 -> Some Negative
         | NewValue.NegativeInfinity -> Some Negative
@@ -108,6 +126,8 @@ module NewValue =
     let isMinusOne = function | MinusOne -> true | _ -> false
     let isPositive = function | Positive -> true | _ -> false
     let isNegative = function | Negative -> true | _ -> false
+    let isApproxOne = function | ApproxOne -> true | _ -> false
+    let isApproxMinusOne = function | ApproxMinusOne -> true | _ -> false
     let isApproximation = function | Approximation -> true | _ -> false
     let isExact = function | Exact -> true | _ -> false
 
@@ -115,6 +135,26 @@ module NewValue =
         | E -> NewValue.RealApprox Constants.E
         | Pi -> NewValue.RealApprox Constants.Pi
         | I -> NewValue.ComplexApprox Complex.onei
+
+    let approximate = function
+        | ExactValue.Rational a -> NewValue.RealApprox (float a)
+        | ExactValue.ComplexRational a -> NewValue.ComplexApprox (complex (float a.Real) (float a.Imaginary))
+        | ExactValue.Constant c -> resolveConstant c
+        | ExactValue.DirectedConstant (c, ComplexBigRational.RealRational r) ->
+            match resolveConstant c with
+            | NewValue.RealApprox x -> (float r) * x |> fromReal
+            | NewValue.ComplexApprox x -> (float r) * x |> fromComplex
+        | ExactValue.DirectedConstant (c, ComplexBigRational.Complex (r,i)) ->
+            let fr = float r
+            let fi = float i
+            match resolveConstant c with
+            | NewValue.RealApprox x -> complex (fr * x) (fi * x) |> fromComplex
+            | NewValue.ComplexApprox x -> complex (fr * x.Real - fi * x.Imaginary) (fr * x.Imaginary + fi * x.Real) |> fromComplex
+        | ExactValue.NegativeInfinity -> NewValue.Exact ExactValue.NegativeInfinity
+        | ExactValue.PositiveInfinity -> NewValue.Exact ExactValue.PositiveInfinity
+        | ExactValue.DirectedInfinity _ as x -> NewValue.Exact x
+        | ExactValue.ComplexInfinity -> NewValue.Exact ExactValue.ComplexInfinity
+        | ExactValue.Undefined -> NewValue.Exact ExactValue.Undefined
 
     let rec negate = function
         | NewValue.Rational a -> NewValue.Rational (-a)
@@ -276,125 +316,65 @@ module NewValue =
 
 
     let rec sin = function
-        | Zero -> zero
-        | NewValue.Constant Pi -> zero
+        | NewValue.Exact x -> ExactValue.trySin x |> Option.map fromExact |> Option.defaultWith (fun () -> approximate x |> sin)
         | NewValue.RealApprox a -> Math.Sin a |> fromReal
         | NewValue.ComplexApprox a -> Complex.sin a |> fromComplex
-        | NewValue.Rational a -> NewValue.RealApprox (float a) |> sin
-        | NewValue.Constant c -> resolveConstant c |> sin
-        | NewValue.ComplexInfinity | NewValue.PositiveInfinity | NewValue.NegativeInfinity -> NewValue.Undefined
-        | NewValue.Undefined -> NewValue.Undefined
 
     let rec cos = function
-        | Zero -> one
-        | NewValue.Constant Pi -> minusOne
+        | NewValue.Exact x -> ExactValue.tryCos x |> Option.map fromExact |> Option.defaultWith (fun () -> approximate x |> cos)
         | NewValue.RealApprox a -> Math.Cos a |> fromReal
         | NewValue.ComplexApprox a -> Complex.cos a |> fromComplex
-        | NewValue.Rational a -> NewValue.RealApprox (float a) |> cos
-        | NewValue.Constant c -> resolveConstant c |> cos
-        | NewValue.ComplexInfinity | NewValue.PositiveInfinity | NewValue.NegativeInfinity -> NewValue.Undefined
-        | NewValue.Undefined -> NewValue.Undefined
 
     let rec tan = function
-        | Zero -> zero
-        | NewValue.Constant Pi -> zero
+        | NewValue.Exact x -> ExactValue.tryTan x |> Option.map fromExact |> Option.defaultWith (fun () -> approximate x |> tan)
         | NewValue.RealApprox a -> Math.Tan a |> fromReal
         | NewValue.ComplexApprox a -> Complex.tan a |> fromComplex
-        | NewValue.Rational a -> NewValue.RealApprox (float a) |> tan
-        | NewValue.Constant c -> resolveConstant c |> tan
-        | NewValue.ComplexInfinity | NewValue.PositiveInfinity | NewValue.NegativeInfinity -> NewValue.Undefined
-        | NewValue.Undefined -> NewValue.Undefined
 
     let rec csc = function
-        | Zero -> NewValue.ComplexInfinity
-        | NewValue.Constant Pi -> NewValue.ComplexInfinity
+        | NewValue.Exact x -> ExactValue.tryCsc x |> Option.map fromExact |> Option.defaultWith (fun () -> approximate x |> csc)
         | NewValue.RealApprox a -> Trig.Csc a |> fromReal
         | NewValue.ComplexApprox a -> Trig.Csc a |> fromComplex
-        | NewValue.Rational a -> NewValue.RealApprox (float a) |> csc
-        | NewValue.Constant c -> resolveConstant c |> csc
-        | NewValue.ComplexInfinity | NewValue.PositiveInfinity | NewValue.NegativeInfinity -> NewValue.Undefined
-        | NewValue.Undefined -> NewValue.Undefined
 
     let rec sec = function
-        | Zero -> one
-        | NewValue.Constant Pi -> minusOne
+        | NewValue.Exact x -> ExactValue.trySec x |> Option.map fromExact |> Option.defaultWith (fun () -> approximate x |> sec)
         | NewValue.RealApprox a -> Trig.Sec a |> fromReal
         | NewValue.ComplexApprox a -> Trig.Sec a |> fromComplex
-        | NewValue.Rational a -> NewValue.RealApprox (float a) |> sec
-        | NewValue.Constant c -> resolveConstant c |> sec
-        | NewValue.ComplexInfinity | NewValue.PositiveInfinity | NewValue.NegativeInfinity -> NewValue.Undefined
-        | NewValue.Undefined -> NewValue.Undefined
 
     let rec cot = function
-        | Zero -> NewValue.ComplexInfinity
-        | NewValue.Constant Pi -> NewValue.ComplexInfinity
+        | NewValue.Exact x -> ExactValue.tryCot x |> Option.map fromExact |> Option.defaultWith (fun () -> approximate x |> cot)
         | NewValue.RealApprox a -> Trig.Cot a |> fromReal
         | NewValue.ComplexApprox a -> Trig.Cot a |> fromComplex
-        | NewValue.Rational a -> NewValue.RealApprox (float a) |> cot
-        | NewValue.Constant c -> resolveConstant c |> cot
-        | NewValue.ComplexInfinity | NewValue.PositiveInfinity | NewValue.NegativeInfinity -> NewValue.Undefined
-        | NewValue.Undefined -> NewValue.Undefined
 
 
     let rec sinh = function
-        | Zero -> zero
+        | NewValue.Exact x -> ExactValue.trySinh x |> Option.map fromExact |> Option.defaultWith (fun () -> approximate x |> sinh)
         | NewValue.RealApprox a -> Trig.Sinh a |> fromReal
         | NewValue.ComplexApprox a -> Trig.Sinh a |> fromComplex
-        | NewValue.Rational a -> NewValue.RealApprox (float a) |> sinh
-        | NewValue.Constant c -> resolveConstant c |> sinh
-        | NewValue.PositiveInfinity -> NewValue.PositiveInfinity
-        | NewValue.NegativeInfinity -> NewValue.NegativeInfinity
-        | NewValue.Undefined | NewValue.ComplexInfinity -> NewValue.Undefined
 
     let rec cosh = function
-        | Zero -> one
+        | NewValue.Exact x -> ExactValue.tryCosh x |> Option.map fromExact |> Option.defaultWith (fun () -> approximate x |> cosh)
         | NewValue.RealApprox a -> Trig.Cosh a |> fromReal
         | NewValue.ComplexApprox a -> Trig.Cosh a |> fromComplex
-        | NewValue.Rational a -> NewValue.RealApprox (float a) |> cosh
-        | NewValue.Constant c -> resolveConstant c |> cosh
-        | NewValue.PositiveInfinity -> NewValue.PositiveInfinity
-        | NewValue.NegativeInfinity -> NewValue.PositiveInfinity
-        | NewValue.Undefined | NewValue.ComplexInfinity -> NewValue.Undefined
 
     let rec tanh = function
-        | Zero -> zero
+        | NewValue.Exact x -> ExactValue.tryTanh x |> Option.map fromExact |> Option.defaultWith (fun () -> approximate x |> tanh)
         | NewValue.RealApprox a -> Trig.Tanh a |> fromReal
         | NewValue.ComplexApprox a -> Trig.Tanh a |> fromComplex
-        | NewValue.Rational a -> NewValue.RealApprox (float a) |> tanh
-        | NewValue.Constant c -> resolveConstant c |> tanh
-        | NewValue.PositiveInfinity -> one
-        | NewValue.NegativeInfinity -> minusOne
-        | NewValue.Undefined | NewValue.ComplexInfinity -> NewValue.Undefined
 
     let rec csch = function
-        | Zero -> NewValue.ComplexInfinity
+        | NewValue.Exact x -> ExactValue.tryCsch x |> Option.map fromExact |> Option.defaultWith (fun () -> approximate x |> csch)
         | NewValue.RealApprox a -> Trig.Csch a |> fromReal
         | NewValue.ComplexApprox a -> Trig.Csch a |> fromComplex
-        | NewValue.Rational a -> NewValue.RealApprox (float a) |> csch
-        | NewValue.Constant c -> resolveConstant c |> csch
-        | NewValue.PositiveInfinity -> zero
-        | NewValue.NegativeInfinity -> zero
-        | NewValue.Undefined | NewValue.ComplexInfinity -> NewValue.Undefined
 
     let rec sech = function
-        | Zero -> one
+        | NewValue.Exact x -> ExactValue.trySech x |> Option.map fromExact |> Option.defaultWith (fun () -> approximate x |> sech)
         | NewValue.RealApprox a -> Trig.Sech a |> fromReal
         | NewValue.ComplexApprox a -> Trig.Sech a |> fromComplex
-        | NewValue.Rational a -> NewValue.RealApprox (float a) |> sech
-        | NewValue.Constant c -> resolveConstant c |> sech
-        | NewValue.PositiveInfinity -> zero
-        | NewValue.NegativeInfinity -> zero
-        | NewValue.Undefined | NewValue.ComplexInfinity -> NewValue.Undefined
 
     let rec coth = function
-        | Zero -> NewValue.ComplexInfinity
+        | NewValue.Exact x -> ExactValue.tryCoth x |> Option.map fromExact |> Option.defaultWith (fun () -> approximate x |> coth)
         | NewValue.RealApprox a -> Trig.Coth a |> fromReal
         | NewValue.ComplexApprox a -> Trig.Coth a |> fromComplex
-        | NewValue.Rational a -> NewValue.RealApprox (float a) |> coth
-        | NewValue.Constant c -> resolveConstant c |> coth
-        | NewValue.PositiveInfinity -> one
-        | NewValue.NegativeInfinity -> minusOne
-        | NewValue.Undefined | NewValue.ComplexInfinity -> NewValue.Undefined
 
 
     let rec asin = function

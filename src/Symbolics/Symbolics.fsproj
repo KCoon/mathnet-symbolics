@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Library</OutputType>
@@ -33,6 +33,7 @@ Uses Math.NET Numerics v4.7</PackageReleaseNotes>
   <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="Symbols.fs" />
+    <Compile Include="ExactValue.fs" />
     <Compile Include="NewValue.fs" />
     <Compile Include="Approximation.fs" />
     <Compile Include="Value.fs" />
